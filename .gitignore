@@ -1,3 +1,10 @@
 .codex-review/
 .codex-v11/
 ~$*.docx
+node_modules/
+dist/
+coverage/
+.env
+*.log
+.vite/
+.DS_Store

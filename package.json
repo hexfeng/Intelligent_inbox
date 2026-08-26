@@ -1,0 +1,25 @@
+{
+  "name": "intelligent-inbox",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @intelligent-inbox/contracts && npm run build --workspace @intelligent-inbox/api && npm run build --workspace @intelligent-inbox/extension",
+    "typecheck": "npm run typecheck --workspace @intelligent-inbox/contracts && npm run typecheck --workspace @intelligent-inbox/api && npm run typecheck --workspace @intelligent-inbox/extension",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev:api": "npm run dev --workspace @intelligent-inbox/api",
+    "dev:extension": "npm run dev --workspace @intelligent-inbox/extension"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

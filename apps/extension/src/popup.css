@@ -1,0 +1,13 @@
+html, body { margin: 0; width: 360px; min-height: 430px; }
+.popup-shell { padding: 20px; display: grid; gap: 14px; }
+.popup-header { display: flex; align-items: center; gap: 10px; }
+.popup-header h1 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
+.account-card { border: 1px solid #d7dfeb; border-radius: 10px; padding: 14px; }
+.account-row { display: flex; gap: 10px; align-items: flex-start; }
+.account-row div { display: grid; gap: 3px; }
+.account-row strong { font-size: 13px; }
+.account-row span { font-size: 12px; color: #66758a; }
+.empty-state { background: #f4f7fb; border-radius: 10px; padding: 14px; font-size: 13px; line-height: 1.5; }
+.empty-state p { margin: 0; }
+.popup-action { width: 100%; }
+footer { border-top: 1px solid #e1e7ef; padding-top: 13px; color: #66758a; font-size: 11px; line-height: 1.45; }

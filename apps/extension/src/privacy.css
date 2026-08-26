@@ -1,0 +1,12 @@
+html, body { margin: 0; min-height: 100%; background: #f4f7fb; }
+.privacy-shell { width: min(760px, calc(100% - 32px)); margin: 48px auto; display: grid; gap: 16px; }
+.privacy-shell header { display: flex; gap: 14px; align-items: flex-start; padding: 4px 2px 10px; }
+.privacy-shell h1 { margin: 0; font-size: 26px; letter-spacing: -.03em; }
+.privacy-shell header p, .privacy-shell section p { margin: 6px 0 0; color: #52657d; line-height: 1.6; }
+.privacy-shell section { background: #fff; border: 1px solid #d7dfeb; border-radius: 12px; padding: 20px; }
+.privacy-shell h2 { margin: 0; font-size: 15px; }
+.privacy-shell a { color: #1a73e8; display: inline-flex; align-items: center; gap: 5px; margin-top: 10px; font-size: 13px; }
+.privacy-result { background: #e6f4ea; color: #137333; border-radius: 8px; padding: 12px; }
+.privacy-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.privacy-danger { color: #b3261e; border-color: #edc5c2; }
+@media (max-width: 560px) { .privacy-actions { flex-direction: column; } }
