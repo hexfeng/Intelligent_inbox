@@ -68,6 +68,9 @@ Set `APP_ORIGIN=chrome-extension://<extension-id>` and rebuild the extension if 
 npm run typecheck
 npm test
 npm run build
+npm run phase8a:check
 ```
+
+After PostgreSQL, migration and the API are running, use `npm run phase8a:live` to verify the database schema, API health and unauthenticated boundary. The detailed real-account flow is in [the Phase 8 test plan](docs/PHASE_8_TEST_PLAN.md).
 
 Automated tests do not satisfy the Google-account release gate. Complete [the manual acceptance matrix](docs/MANUAL_ACCEPTANCE.md) before inviting Alpha users.

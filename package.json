@@ -11,6 +11,8 @@
     "typecheck": "npm run typecheck --workspace @intelligent-inbox/contracts && npm run typecheck --workspace @intelligent-inbox/api && npm run typecheck --workspace @intelligent-inbox/extension",
     "test": "vitest run",
     "test:watch": "vitest",
+    "phase8a:check": "node scripts/phase-8a-check.mjs",
+    "phase8a:live": "node scripts/phase-8a-check.mjs --live",
     "dev:api": "npm run dev --workspace @intelligent-inbox/api",
     "dev:extension": "npm run dev --workspace @intelligent-inbox/extension"
   },
