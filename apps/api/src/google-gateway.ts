@@ -3,7 +3,7 @@ import type { gmail_v1 } from "googleapis";
 import type { WriteAction } from "@intelligent-inbox/contracts";
 import type { AppConfig } from "./config.js";
 import { decryptSecret } from "./crypto.js";
-import type { AccountContext, GoogleGateway, LabelImage, ThreadSnapshot } from "./domain.js";
+import type { AccountContext, GoogleGateway, LabelImage, ThreadAttachment, ThreadSnapshot } from "./domain.js";
 import { AppError } from "./errors.js";
 
 function decodeBase64Url(value: string | null | undefined): string {
@@ -14,15 +14,15 @@ function header(message: gmail_v1.Schema$Message, name: string): string {
   return message.payload?.headers?.find((item) => item.name?.toLowerCase() === name.toLowerCase())?.value ?? "";
 }
 
-function collectText(part: gmail_v1.Schema$MessagePart | undefined): string[] {
+function collectText(part: gmail_v1.Schema$MessagePart | undefined, mimeType: "text/plain" | "text/html"): string[] {
   if (!part) return [];
-  if (part.mimeType === "text/plain") return [decodeBase64Url(part.body?.data)];
-  return (part.parts ?? []).flatMap(collectText);
+  if (part.mimeType === mimeType) return [decodeBase64Url(part.body?.data)];
+  return (part.parts ?? []).flatMap((child) => collectText(child, mimeType));
 }
 
-function collectAttachments(part: gmail_v1.Schema$MessagePart | undefined): string[] {
+function collectAttachments(part: gmail_v1.Schema$MessagePart | undefined): ThreadAttachment[] {
   if (!part) return [];
-  const own = part.filename ? [part.filename] : [];
+  const own = part.filename ? [{ filename: part.filename, ...(part.mimeType ? { mimeType: part.mimeType } : {}) }] : [];
   return own.concat((part.parts ?? []).flatMap(collectAttachments));
 }
 
@@ -36,6 +36,26 @@ export class GoogleApiGateway implements GoogleGateway {
     const last = messages.at(-1);
     if (!last) throw new AppError("THREAD_NOT_FOUND", "Gmail thread was not found", 404);
     const labels = Array.from(new Set(messages.flatMap((message) => message.labelIds ?? []))).sort();
+    const threadMessages = messages.map((message, index) => {
+      const sentAt = message.internalDate ? new Date(Number(message.internalDate)).toISOString() : undefined;
+      const plainText = collectText(message.payload, "text/plain").filter(Boolean).join("\n\n");
+      const htmlText = collectText(message.payload, "text/html").filter(Boolean).join("\n\n");
+      return {
+        messageId: header(message, "Message-ID") || message.id || `${threadId}-${index}`,
+        subject: header(message, "Subject"),
+        sender: header(message, "From"),
+        ...(header(message, "Reply-To") ? { replyTo: header(message, "Reply-To") } : {}),
+        recipients: header(message, "To").split(",").map((value) => value.trim()).filter(Boolean),
+        ...(sentAt ? { sentAt } : {}),
+        plainText,
+        ...(htmlText ? { htmlText } : {}),
+        attachments: collectAttachments(message.payload),
+        headers: {
+          listUnsubscribe: Boolean(header(message, "List-Unsubscribe")),
+          ...(header(message, "Precedence") ? { precedence: header(message, "Precedence") } : {})
+        }
+      };
+    });
     return {
       threadId,
       threadVersion: response.data.historyId ?? last.id ?? threadId,
@@ -43,11 +63,11 @@ export class GoogleApiGateway implements GoogleGateway {
       sender: header(last, "From"),
       ...(header(last, "Reply-To") ? { replyTo: header(last, "Reply-To") } : {}),
       recipients: header(last, "To").split(",").map((value) => value.trim()).filter(Boolean),
-      plainText: messages.flatMap((message) => collectText(message.payload)).filter(Boolean).join("\n\n"),
-      attachments: messages.flatMap((message) => collectAttachments(message.payload)),
+      attachments: threadMessages.flatMap((message) => message.attachments.map((attachment) => attachment.filename)),
       labels,
       ...(last.id ? { messageId: header(last, "Message-ID") || last.id } : {}),
-      ...(header(last, "References") ? { references: header(last, "References") } : {})
+      ...(header(last, "References") ? { references: header(last, "References") } : {}),
+      messages: threadMessages
     };
   }
 

@@ -1,9 +1,4 @@
-import type { EmailIntelligenceV11, RecommendationSet } from "@intelligent-inbox/contracts";
+import type { AnalysisResultV2, SummaryResult } from "@intelligent-inbox/contracts";
 
-export type AnalysisResult = {
-  intelligence: EmailIntelligenceV11;
-  recommendations: RecommendationSet;
-  cached?: boolean;
-};
-
-export type TriageQueue = { items: AnalysisResult[] };
+export type AnalysisResult = AnalysisResultV2;
+export type SummaryResponse = SummaryResult & { cached: boolean };

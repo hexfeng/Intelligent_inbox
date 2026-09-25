@@ -7,14 +7,12 @@ export const attentionStateSchema = z.enum([
   "REVIEW"
 ]);
 
-export const intentSchema = z.enum([
+export const communicationIntentSchema = z.enum([
   "QUESTION",
-  "REQUEST",
-  "MEETING_REQUEST",
-  "INVOICE",
-  "INTRODUCTION",
-  "NEWSLETTER",
-  "NOTIFICATION",
+  "REQUEST_ACTION",
+  "REQUEST_MEETING",
+  "INFORM",
+  "INTRODUCE",
   "UNKNOWN"
 ]);
 
@@ -23,12 +21,13 @@ export const contentTypeSchema = z.enum([
   "NEWSLETTER",
   "PROMOTION",
   "NOTIFICATION",
+  "INVOICE",
   "RECEIPT",
   "OTHER"
 ]);
 
-export const workflowStateSchema = z.enum(["OPEN", "RESOLVED"]);
 export const prioritySchema = z.enum(["HIGH", "NORMAL", "LOW"]);
+export const urgencyLevelSchema = z.enum(["NONE", "LOW", "MEDIUM", "HIGH"]);
 
 export const safeActionSchema = z.enum([
   "NO_ACTION",
@@ -60,31 +59,103 @@ export const recommendationSetSchema = z.object({
   status: z.enum(["CURRENT", "STALE"])
 });
 
-export const verifiedFactsSchema = z.object({
-  sender: z.string().optional(),
-  recipients: z.array(z.string()).default([]),
-  subject: z.string().optional(),
-  dates: z.array(z.string()).default([]),
-  amounts: z.array(z.string()).default([]),
-  attachments: z.array(z.string()).default([]),
-  participants: z.array(z.string()).default([])
+const probabilitySchema = z.number().min(0).max(1);
+
+function probabilityMap<T extends z.ZodRawShape>(shape: T) {
+  return z.object(shape).superRefine((value, context) => {
+    const total = Object.values(value).reduce<number>((sum, item) => sum + Number(item), 0);
+    if (Math.abs(total - 1) > 0.02) {
+      context.addIssue({ code: "custom", message: "probabilities must sum to 1" });
+    }
+  });
+}
+
+export const contentTypeProbabilitiesSchema = probabilityMap({
+  CONVERSATION: probabilitySchema,
+  NEWSLETTER: probabilitySchema,
+  PROMOTION: probabilitySchema,
+  NOTIFICATION: probabilitySchema,
+  INVOICE: probabilitySchema,
+  RECEIPT: probabilitySchema,
+  OTHER: probabilitySchema
 });
 
-export const emailIntelligenceV11Schema = z.object({
-  schema_version: z.literal("1.1"),
+export const communicationIntentProbabilitiesSchema = probabilityMap({
+  QUESTION: probabilitySchema,
+  REQUEST_ACTION: probabilitySchema,
+  REQUEST_MEETING: probabilitySchema,
+  INFORM: probabilitySchema,
+  INTRODUCE: probabilitySchema,
+  UNKNOWN: probabilitySchema
+});
+
+export const urgencyProbabilitiesSchema = probabilityMap({
+  NONE: probabilitySchema,
+  LOW: probabilitySchema,
+  MEDIUM: probabilitySchema,
+  HIGH: probabilitySchema
+});
+
+export const decisionSignalsV2Schema = z.object({
+  schema_version: z.literal("2.0"),
   thread_id: z.string().min(1),
   thread_version: z.string().min(1),
+  content_type: z.object({
+    value: contentTypeSchema,
+    probabilities: contentTypeProbabilitiesSchema,
+    confidence: probabilitySchema
+  }),
+  communication_intent: z.object({
+    value: communicationIntentSchema,
+    probabilities: communicationIntentProbabilitiesSchema,
+    confidence: probabilitySchema
+  }),
+  is_subscription: probabilitySchema,
+  is_automated_sender: probabilitySchema,
+  reply_expected: probabilitySchema,
+  action_required: probabilitySchema,
+  attachment_dependency: probabilitySchema,
+  contradictory_thread: probabilitySchema,
+  urgency: z.object({
+    score: z.number().min(0).max(3),
+    probabilities: urgencyProbabilitiesSchema,
+    confidence: probabilitySchema
+  }),
+  provider: z.enum(["JEV", "OPENAI_LUNA"]),
+  model_version: z.string().min(1),
+  question_set_version: z.string().min(1),
+  usage: z.object({
+    input_tokens: z.number().int().min(0),
+    output_tokens: z.number().int().min(0)
+  }).optional()
+});
+
+export const derivedStateV2Schema = z.object({
   attention_state: attentionStateSchema,
-  intent: intentSchema,
-  content_type: contentTypeSchema,
-  workflow_state: workflowStateSchema,
   priority: prioritySchema,
-  summary: z.array(z.string().min(1).max(240)).min(1).max(4),
-  suggested_action: safeActionSchema,
-  reason_code: z.string().min(1).max(80),
   review_required: z.boolean(),
-  confidence: z.number().min(0).max(1),
-  verified_facts: verifiedFactsSchema
+  reason_codes: z.array(z.string().min(1).max(80)).min(1).max(8)
+});
+
+export const threadHeaderSchema = z.object({
+  sender: z.string(),
+  subject: z.string()
+});
+
+export const summaryResultSchema = z.object({
+  schema_version: z.literal("1.0"),
+  thread_id: z.string().min(1),
+  thread_version: z.string().min(1),
+  bullets: z.array(z.string().min(1).max(240)).min(1).max(4)
+});
+
+export const analysisResultV2Schema = z.object({
+  thread_header: threadHeaderSchema,
+  decision_signals: decisionSignalsV2Schema,
+  derived_state: derivedStateV2Schema,
+  recommendations: recommendationSetSchema,
+  cached: z.boolean(),
+  pipeline_version: z.string().min(1)
 });
 
 export const actionExecuteRequestSchema = z.object({
@@ -114,7 +185,14 @@ export const feedbackEventSchema = z.object({
   event_type: z.enum(["ACCEPT", "SKIP", "WRONG", "EDIT", "UNDO", "CORRECT_FIELD"]),
   recommendation_id: z.string().optional(),
   rewrite_intent: z.enum(["SHORTER", "MORE_FORMAL", "FRIENDLY", "DECLINE"]).optional(),
-  corrected_field: z.enum(["attention_state", "intent", "priority", "suggested_action"]).optional(),
+  corrected_field: z.enum([
+    "content_type",
+    "communication_intent",
+    "is_subscription",
+    "attention_state",
+    "priority",
+    "recommendation_action"
+  ]).optional(),
   corrected_value: z.string().max(80).optional()
 });
 
@@ -154,7 +232,12 @@ export const calendarSlotSchema = z.object({
   source: z.literal("GOOGLE_FREEBUSY")
 });
 
-export type EmailIntelligenceV11 = z.infer<typeof emailIntelligenceV11Schema>;
+export type ContentType = z.infer<typeof contentTypeSchema>;
+export type CommunicationIntent = z.infer<typeof communicationIntentSchema>;
+export type DecisionSignalsV2 = z.infer<typeof decisionSignalsV2Schema>;
+export type DerivedStateV2 = z.infer<typeof derivedStateV2Schema>;
+export type AnalysisResultV2 = z.infer<typeof analysisResultV2Schema>;
+export type SummaryResult = z.infer<typeof summaryResultSchema>;
 export type RecommendationSet = z.infer<typeof recommendationSetSchema>;
 export type Recommendation = z.infer<typeof recommendationSchema>;
 export type ActionExecuteRequest = z.infer<typeof actionExecuteRequestSchema>;

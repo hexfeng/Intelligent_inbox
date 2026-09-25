@@ -1,20 +1,22 @@
 import { describe, expect, it } from "vitest";
-import type { EmailIntelligenceV11 } from "@intelligent-inbox/contracts";
 import { draftRecipient, sanitizeHeader } from "./google-gateway.js";
-import { sanitizeIntelligenceForStorage } from "./postgres-repository.js";
-import { testThread } from "./test-fakes.js";
-
-const intelligence: EmailIntelligenceV11 = {
-  schema_version: "1.1", thread_id: "thread-1", thread_version: "v1", attention_state: "NEEDS_REPLY",
-  intent: "QUESTION", content_type: "CONVERSATION", workflow_state: "OPEN", priority: "NORMAL",
-  summary: ["A derived summary."], suggested_action: "DRAFT_REPLY", reason_code: "QUESTION",
-  review_required: false, confidence: 0.9,
-  verified_facts: { sender: "sender@example.com", recipients: ["user@example.com"], subject: "Private subject", dates: ["Thursday"], amounts: ["$50"], attachments: ["secret.pdf"], participants: ["Maya"] }
-};
+import { sanitizeDecisionForStorage } from "./postgres-repository.js";
+import { PIPELINE_VERSION } from "./pipeline.js";
+import { buildRecommendationSet, deriveState } from "./recommendations.js";
+import { testDecisionSignals, testThread } from "./test-fakes.js";
 
 describe("privacy and draft boundaries", () => {
-  it("removes free-text verified facts before database persistence", () => {
-    expect(sanitizeIntelligenceForStorage(intelligence).verified_facts).toEqual({ recipients: [], dates: [], amounts: [], attachments: [], participants: [] });
+  it("persists only the typed decision record and strips unknown email content", () => {
+    const signals = Object.assign(testDecisionSignals(), { raw_body: "Private email body" });
+    const state = deriveState(signals);
+    const stored = sanitizeDecisionForStorage({
+      decisionSignals: signals,
+      derivedState: state,
+      recommendations: buildRecommendationSet(signals, state),
+      pipelineVersion: PIPELINE_VERSION
+    });
+    expect(JSON.stringify(stored)).not.toContain("Private email body");
+    expect(stored.decisionSignals).not.toHaveProperty("raw_body");
   });
 
   it("prefers a single verified Reply-To mailbox", () => {

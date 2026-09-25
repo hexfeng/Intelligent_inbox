@@ -1,10 +1,12 @@
 import type {
   ActionExecution,
-  EmailIntelligenceV11,
-  FeedbackEvent,
   CalendarSlot,
+  DecisionSignalsV2,
+  DerivedStateV2,
+  FeedbackEvent,
   MeetingConstraints,
   RecommendationSet,
+  SummaryResult,
   WriteAction
 } from "@intelligent-inbox/contracts";
 
@@ -16,6 +18,21 @@ export type AccountContext = {
   encryptedRefreshToken: string;
 };
 
+export type ThreadAttachment = { filename: string; mimeType?: string };
+
+export type ThreadMessage = {
+  messageId: string;
+  subject: string;
+  sender: string;
+  replyTo?: string;
+  recipients: string[];
+  sentAt?: string;
+  plainText: string;
+  htmlText?: string;
+  attachments: ThreadAttachment[];
+  headers: { listUnsubscribe: boolean; precedence?: string };
+};
+
 export type ThreadSnapshot = {
   threadId: string;
   threadVersion: string;
@@ -23,11 +40,31 @@ export type ThreadSnapshot = {
   sender: string;
   replyTo?: string;
   recipients: string[];
-  plainText: string;
   attachments: string[];
   labels: string[];
   messageId?: string;
   references?: string;
+  messages: ThreadMessage[];
+};
+
+export type NormalizedMessage = Omit<ThreadMessage, "plainText" | "htmlText"> & { bodyText: string };
+export type NormalizedThread = Pick<ThreadSnapshot, "threadId" | "threadVersion" | "labels"> & { messages: NormalizedMessage[] };
+
+export type EvidenceRef = {
+  messageId: string;
+  field: "SUBJECT" | "SENDER" | "RECIPIENT" | "ATTACHMENT" | "BODY";
+  value: string;
+  start?: number;
+  end?: number;
+};
+
+export type EvidenceEnvelope = Pick<ThreadSnapshot, "threadId" | "threadVersion"> & { refs: EvidenceRef[] };
+
+export type DecisionRecord = {
+  decisionSignals: DecisionSignalsV2;
+  derivedState: DerivedStateV2;
+  recommendations: RecommendationSet;
+  pipelineVersion: string;
 };
 
 export type LabelImage = { messages: Array<{ id: string; labels: string[] }> };
@@ -51,8 +88,10 @@ export interface Repository {
   upsertGoogleAccount(input: { googleSub: string; email: string; scopes: string[]; encryptedRefreshToken: string }): Promise<AccountContext>;
   createSession(input: { tokenHash: string; userId: string; accountId: string; expiresAt: Date }): Promise<void>;
   resolveSession(tokenHash: string): Promise<AccountContext | null>;
-  saveIntelligence(input: { accountId: string; intelligence: EmailIntelligenceV11; recommendations: RecommendationSet; modelVersion: string }): Promise<void>;
-  getIntelligence(accountId: string, threadId: string, threadVersion?: string): Promise<{ intelligence: EmailIntelligenceV11; recommendations: RecommendationSet } | null>;
+  saveDecision(input: { accountId: string; record: DecisionRecord }): Promise<void>;
+  getDecision(accountId: string, threadId: string, threadVersion: string | undefined, pipelineVersion: string): Promise<DecisionRecord | null>;
+  saveSummary(input: { accountId: string; summary: SummaryResult; pipelineVersion: string }): Promise<void>;
+  getSummary(accountId: string, threadId: string, threadVersion: string, pipelineVersion: string): Promise<SummaryResult | null>;
   getRecommendation(accountId: string, recommendationId: string): Promise<{ threadId: string; threadVersion: string; actionType: string } | null>;
   getExecutionByIdempotency(accountId: string, key: string): Promise<StoredExecution | null>;
   saveExecution(execution: StoredExecution): Promise<void>;
@@ -73,8 +112,11 @@ export interface GoogleGateway {
   revoke(account: AccountContext): Promise<void>;
 }
 
-export interface IntelligenceProvider {
-  analyze(snapshot: ThreadSnapshot): Promise<EmailIntelligenceV11>;
-  draft(snapshot: ThreadSnapshot, intelligence: EmailIntelligenceV11, instruction?: string): Promise<string>;
-  meetingDraft(snapshot: ThreadSnapshot, intelligence: EmailIntelligenceV11, constraints: MeetingConstraints, slots: CalendarSlot[]): Promise<string>;
+export interface DecisionProvider { decide(thread: NormalizedThread): Promise<DecisionSignalsV2> }
+
+export interface SummaryProvider { summarize(thread: NormalizedThread, evidence: EvidenceEnvelope): Promise<string[]> }
+
+export interface DraftProvider {
+  draft(snapshot: ThreadSnapshot, thread: NormalizedThread, evidence: EvidenceEnvelope, state: DerivedStateV2, instruction?: string): Promise<string>;
+  meetingDraft(snapshot: ThreadSnapshot, thread: NormalizedThread, evidence: EvidenceEnvelope, state: DerivedStateV2, constraints: MeetingConstraints, slots: CalendarSlot[]): Promise<string>;
 }
