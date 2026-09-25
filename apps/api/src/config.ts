@@ -9,10 +9,18 @@ const configSchema = z.object({
   TOKEN_ENCRYPTION_KEY_BASE64: z.string().min(1),
   GOOGLE_CLIENT_ID: z.string().min(1),
   GOOGLE_CLIENT_SECRET: z.string().min(1),
+  DECISION_BACKEND: z.enum(["jev", "openai-luna"]).default("jev"),
+  TYPESAFE_API_KEY: z.string().min(1).optional(),
+  TYPESAFE_MODEL: z.string().min(1).default("jev-latest"),
   OPENAI_API_KEY: z.string().min(1),
-  OPENAI_CLASSIFIER_MODEL: z.string().min(1),
-  OPENAI_DRAFT_MODEL: z.string().min(1),
+  OPENAI_DECISION_MODEL: z.string().min(1).default("gpt-6-luna"),
+  OPENAI_SUMMARY_MODEL: z.string().min(1).default("gpt-6-luna"),
+  OPENAI_DRAFT_MODEL: z.string().min(1).default("gpt-6-sol"),
   OPENAI_STORE: z.literal("false").default("false")
+}).superRefine((value, context) => {
+  if (value.DECISION_BACKEND === "jev" && !value.TYPESAFE_API_KEY) {
+    context.addIssue({ code: "custom", path: ["TYPESAFE_API_KEY"], message: "TYPESAFE_API_KEY is required for JEV" });
+  }
 });
 
 export type AppConfig = z.infer<typeof configSchema>;

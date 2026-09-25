@@ -1,7 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
-import type { EmailIntelligenceV11, FeedbackEvent, RecommendationSet } from "@intelligent-inbox/contracts";
-import type { AccountContext, Repository, StoredExecution } from "./domain.js";
+import {
+  decisionSignalsV2Schema,
+  derivedStateV2Schema,
+  recommendationSetSchema,
+  type FeedbackEvent,
+  type RecommendationSet,
+  type SummaryResult
+} from "@intelligent-inbox/contracts";
+import type { AccountContext, DecisionRecord, Repository, StoredExecution } from "./domain.js";
 
 export class PostgresRepository implements Repository {
   constructor(private readonly pool: Pool) {}
@@ -101,32 +108,34 @@ export class PostgresRepository implements Repository {
     };
   }
 
-  async saveIntelligence(input: { accountId: string; intelligence: EmailIntelligenceV11; recommendations: RecommendationSet; modelVersion: string }): Promise<void> {
-    const persistedIntelligence = sanitizeIntelligenceForStorage(input.intelligence);
+  async saveDecision(input: { accountId: string; record: DecisionRecord }): Promise<void> {
+    const persistedRecord = sanitizeDecisionForStorage(input.record);
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
       const intelligenceId = randomUUID();
       await client.query(
-        `INSERT INTO intelligence_results(id, account_id, gmail_thread_id, thread_version, result_json, model_version)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT(account_id, gmail_thread_id, thread_version)
+        `INSERT INTO intelligence_results(id, account_id, gmail_thread_id, thread_version, result_json, model_version, pipeline_version)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT(account_id, gmail_thread_id, thread_version, pipeline_version)
          DO UPDATE SET result_json = EXCLUDED.result_json, model_version = EXCLUDED.model_version`,
-        [intelligenceId, input.accountId, input.intelligence.thread_id, input.intelligence.thread_version, persistedIntelligence, input.modelVersion]
+        [intelligenceId, input.accountId, input.record.decisionSignals.thread_id, input.record.decisionSignals.thread_version,
+          persistedRecord, input.record.decisionSignals.model_version, input.record.pipelineVersion]
       );
       const idResult = await client.query(
-        `SELECT id FROM intelligence_results WHERE account_id = $1 AND gmail_thread_id = $2 AND thread_version = $3`,
-        [input.accountId, input.intelligence.thread_id, input.intelligence.thread_version]
+        `SELECT id FROM intelligence_results WHERE account_id = $1 AND gmail_thread_id = $2 AND thread_version = $3 AND pipeline_version = $4`,
+        [input.accountId, input.record.decisionSignals.thread_id, input.record.decisionSignals.thread_version, input.record.pipelineVersion]
       );
       const persistedIntelligenceId = idResult.rows[0]?.id as string;
       await client.query(
-        `DELETE FROM recommendation_sets WHERE account_id = $1 AND gmail_thread_id = $2 AND thread_version = $3`,
-        [input.accountId, input.intelligence.thread_id, input.intelligence.thread_version]
+        `DELETE FROM recommendation_sets WHERE intelligence_id = $1`,
+        [persistedIntelligenceId]
       );
       await client.query(
         `INSERT INTO recommendation_sets(id, intelligence_id, account_id, gmail_thread_id, thread_version, set_json)
          VALUES ($1, $2, $3, $4, $5, $6)`,
-        [input.recommendations.id, persistedIntelligenceId, input.accountId, input.intelligence.thread_id, input.intelligence.thread_version, input.recommendations]
+        [input.record.recommendations.id, persistedIntelligenceId, input.accountId, input.record.decisionSignals.thread_id,
+          input.record.decisionSignals.thread_version, input.record.recommendations]
       );
       await client.query("COMMIT");
     } catch (error) {
@@ -137,19 +146,39 @@ export class PostgresRepository implements Repository {
     }
   }
 
-  async getIntelligence(accountId: string, threadId: string, threadVersion?: string): Promise<{ intelligence: EmailIntelligenceV11; recommendations: RecommendationSet } | null> {
-    const params: unknown[] = [accountId, threadId];
-    const versionClause = threadVersion ? "AND i.thread_version = $3" : "";
+  async getDecision(accountId: string, threadId: string, threadVersion: string | undefined, pipelineVersion: string): Promise<DecisionRecord | null> {
+    const params: unknown[] = [accountId, threadId, pipelineVersion];
+    const versionClause = threadVersion ? "AND i.thread_version = $4" : "";
     if (threadVersion) params.push(threadVersion);
     const result = await this.pool.query(
-      `SELECT i.result_json, r.set_json FROM intelligence_results i
+      `SELECT i.result_json FROM intelligence_results i
        JOIN recommendation_sets r ON r.intelligence_id = i.id
-       WHERE i.account_id = $1 AND i.gmail_thread_id = $2 ${versionClause}
+       WHERE i.account_id = $1 AND i.gmail_thread_id = $2 AND i.pipeline_version = $3 ${versionClause}
        ORDER BY i.created_at DESC LIMIT 1`,
       params
     );
-    const row = result.rows[0] as { result_json: EmailIntelligenceV11; set_json: RecommendationSet } | undefined;
-    return row ? { intelligence: row.result_json, recommendations: row.set_json } : null;
+    const row = result.rows[0] as { result_json: DecisionRecord } | undefined;
+    return row?.result_json ?? null;
+  }
+
+  async saveSummary(input: { accountId: string; summary: SummaryResult; pipelineVersion: string }): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO summary_results(id, account_id, gmail_thread_id, thread_version, pipeline_version, result_json)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       ON CONFLICT(account_id, gmail_thread_id, thread_version, pipeline_version)
+       DO UPDATE SET result_json = EXCLUDED.result_json`,
+      [randomUUID(), input.accountId, input.summary.thread_id, input.summary.thread_version, input.pipelineVersion, input.summary]
+    );
+  }
+
+  async getSummary(accountId: string, threadId: string, threadVersion: string, pipelineVersion: string): Promise<SummaryResult | null> {
+    const result = await this.pool.query(
+      `SELECT result_json FROM summary_results
+       WHERE account_id = $1 AND gmail_thread_id = $2 AND thread_version = $3 AND pipeline_version = $4
+       LIMIT 1`,
+      [accountId, threadId, threadVersion, pipelineVersion]
+    );
+    return (result.rows[0]?.result_json as SummaryResult | undefined) ?? null;
   }
 
   async getRecommendation(accountId: string, recommendationId: string): Promise<{ threadId: string; threadVersion: string; actionType: string } | null> {
@@ -243,15 +272,11 @@ export class PostgresRepository implements Repository {
   }
 }
 
-export function sanitizeIntelligenceForStorage(intelligence: EmailIntelligenceV11): EmailIntelligenceV11 {
+export function sanitizeDecisionForStorage(record: DecisionRecord): DecisionRecord {
   return {
-    ...intelligence,
-    verified_facts: {
-      recipients: [],
-      dates: [],
-      amounts: [],
-      attachments: [],
-      participants: []
-    }
+    decisionSignals: decisionSignalsV2Schema.parse(record.decisionSignals),
+    derivedState: derivedStateV2Schema.parse(record.derivedState),
+    recommendations: recommendationSetSchema.parse(record.recommendations),
+    pipelineVersion: record.pipelineVersion
   };
 }

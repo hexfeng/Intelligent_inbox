@@ -38,8 +38,10 @@ if (existsSync(envPath)) {
 
 const required = [
   "DATABASE_URL", "TOKEN_ENCRYPTION_KEY_BASE64", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET",
-  "OPENAI_API_KEY", "OPENAI_CLASSIFIER_MODEL", "OPENAI_DRAFT_MODEL", "APP_ORIGIN"
+  "DECISION_BACKEND", "OPENAI_API_KEY", "OPENAI_SUMMARY_MODEL", "OPENAI_DRAFT_MODEL", "APP_ORIGIN"
 ];
+if ((env.get("DECISION_BACKEND") ?? "jev") === "jev") required.push("TYPESAFE_API_KEY", "TYPESAFE_MODEL");
+else required.push("OPENAI_DECISION_MODEL");
 for (const key of required) {
   const value = env.get(key) ?? "";
   const placeholder = /replace|example|changeme|your[_-]/i.test(value);
@@ -84,7 +86,7 @@ if (live) {
     const client = new Client({ connectionString: databaseUrl, connectionTimeoutMillis: 5_000 });
     try {
       await client.connect();
-      const tables = ["users", "connected_accounts", "sessions", "intelligence_results", "recommendation_sets", "action_executions", "feedback_events", "audit_logs"];
+      const tables = ["users", "connected_accounts", "sessions", "intelligence_results", "summary_results", "recommendation_sets", "action_executions", "feedback_events", "audit_logs"];
       const result = await client.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename = ANY($1)", [tables]);
       check("Database migration", result.rowCount === tables.length, `${result.rowCount}/${tables.length} required tables`);
     } catch { check("Database migration", false, "connection or schema check failed"); }

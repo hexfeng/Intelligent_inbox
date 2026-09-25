@@ -1,7 +1,9 @@
 import type { ApiError } from "@intelligent-inbox/contracts";
 import type { BackgroundRequest, BackgroundResponse } from "./messages.js";
+import { createGoogleAuthCoordinator } from "./oauth-flow.js";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8787";
+const connectGoogleOnce = createGoogleAuthCoordinator(connectGoogle);
 
 chrome.runtime.onMessage.addListener((message: BackgroundRequest, _sender, sendResponse: (response: BackgroundResponse) => void) => {
   handleMessage(message).then(sendResponse).catch((error: unknown) => {
@@ -11,7 +13,7 @@ chrome.runtime.onMessage.addListener((message: BackgroundRequest, _sender, sendR
 });
 
 async function handleMessage(message: BackgroundRequest): Promise<BackgroundResponse> {
-  if (message.type === "CONNECT_GOOGLE") return connectGoogle(Boolean(message.includeCalendar));
+  if (message.type === "CONNECT_GOOGLE") return connectGoogleOnce(Boolean(message.includeCalendar));
   if (message.type === "ACCOUNT_STATUS") return apiRequest("/v1/account/status", "GET");
   return apiRequest(message.path, message.method ?? "GET", message.body);
 }

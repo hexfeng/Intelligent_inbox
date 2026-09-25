@@ -2,17 +2,21 @@
 
 Intelligent Inbox is a Gmail decision and action layer delivered as a Chrome MV3 extension plus an independent TypeScript API. It analyzes only user-requested Gmail threads, recommends one next action, executes an explicit safe allow-list, creates Gmail drafts without sending them, and can propose meeting times sourced from Google Calendar FreeBusy.
 
+The code now implements Decision Pipeline v2: JEV is the default probabilistic decision backend, GPT-6 Luna is the contract-compatible decision fallback and summary model, GPT-6 Sol drafts replies, and deterministic local policy owns Review, priority and actions. See [Decision Pipeline v2](docs/DECISION_PIPELINE_V2.md), [Development plan v2](docs/DEVELOPMENT_PLAN_V2.md), [v2 refactor report](docs/V2_REFACTOR_REPORT_2026-09-24.md) and [Implementation status](docs/IMPLEMENTATION_STATUS.md). The Word PRD and phase plan at the repository root remain historical v1.x baselines.
+
 ## Current Alpha scope
 
 - Google OAuth with Gmail Modify and incremental Calendar FreeBusy scopes.
-- Versioned Email Intelligence v1.1 with strict structured output.
+- Per-message normalization, versioned v2 probability signals and pipeline-aware caching.
+- JEV Choice/Noul/Score decisions with an explicit GPT-6 Luna backend switch.
+- Deterministic recommendation and Review policy; models cannot choose executable actions.
 - Archive, Mark Read, Label and Star with ownership, version, risk, idempotency and Undo checks.
-- Gmail Thread Panel, on-demand Triage queue and explicit Selected Batch preview.
+- Gmail Thread Panel with independent summary loading, Extension-owned rolling Triage prefetch and explicit Selected Batch preview.
 - Gmail Draft creation; there is no send endpoint.
 - Calendar FreeBusy slot ranking; there is no event creation endpoint.
 - Feedback, safe audit metadata, disconnect and account data deletion.
 
-The repository intentionally has no Gmail Watch, Pub/Sub, automatic send, unsubscribe, event creation, vector store, hosted OpenAI tools or multi-provider routing.
+The repository intentionally has no Gmail Watch, Pub/Sub, automatic send, unsubscribe, event creation, vector store, hosted model tools or dynamic multi-provider routing.
 
 ## Repository layout
 
@@ -20,12 +24,12 @@ The repository intentionally has no Gmail Watch, Pub/Sub, automatic send, unsubs
 apps/extension     React + Vite + Chrome MV3
 apps/api           Fastify API, Google/OpenAI adapters, PostgreSQL repository
 packages/contracts Shared Zod schemas and TypeScript types
-docs               Architecture, privacy, runbook and manual acceptance gates
+docs               v2 architecture, development plan, privacy, runbook and acceptance gates
 ```
 
 ## Local setup
 
-Requirements: Node.js 22+, Docker Desktop, a Google Cloud OAuth client, an OpenAI API project and Chrome.
+Requirements: Node.js 22+, Docker Desktop, a Google Cloud OAuth client, a TypeSafe/JEV API key, an OpenAI API project and Chrome. Set `DECISION_BACKEND=openai-luna` if you intentionally want the OpenAI decision fallback instead of JEV.
 
 ```powershell
 npm install

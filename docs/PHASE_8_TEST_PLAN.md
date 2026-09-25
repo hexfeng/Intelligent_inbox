@@ -1,6 +1,6 @@
 # Phase 8 test plan
 
-This plan contains no schedule or staffing assumptions. Alpha opens only after every blocker has evidence.
+This plan contains no schedule or staffing assumptions. Decision Pipeline v2 is implemented in code; Alpha opens only after every live-provider and real-account blocker below has evidence.
 
 ## 1. Test environments
 
@@ -17,7 +17,7 @@ Production mailboxes and personal correspondence are excluded from pre-Alpha tes
 
 ### Flow A — Environment bootstrap
 
-1. Complete the root `.env` with a random 32-byte encryption key, exact Extension origin, Google OAuth credentials, OpenAI key and explicit model IDs.
+1. Complete the root `.env` with a random 32-byte encryption key, exact Extension origin, Google OAuth credentials, `DECISION_BACKEND`, the selected decision-provider key and model, and explicit OpenAI summary and Draft model IDs.
 2. Start PostgreSQL with `docker compose up -d`.
 3. Wait for the Compose health check to report `healthy`.
 4. Apply `npm run migrate --workspace @intelligent-inbox/api`.
@@ -50,14 +50,15 @@ Expected result: Popup renders, no duplicate content root appears, and the Conne
 |---|---|---|
 | OAuth | Connect → consent → callback → account status | Correct account email/scopes; refresh token absent from Extension |
 | Incremental Calendar | Gmail-only account → enable FreeBusy | Only Calendar FreeBusy scope added |
-| Analyze | Open Thread → Analyze | Versioned Intelligence, one primary recommendation, valid Schema |
+| Analyze | Open Thread → Analyze | Valid v2 signals, code-derived state, one policy recommendation, pipeline version |
+| Summary | Open analyzed Thread | Decision appears first; summary loads separately and remains evidence-grounded |
 | Abstain | Unknown/conflicting/attachment-dependent message | Review state; no write CTA |
 | Safe action | Analyze → confirm → Archive/Read/Label/Star | One Gmail mutation and audit metadata |
 | Idempotency | Repeat identical key concurrently | Same execution ID; no second mutation |
 | Undo | Execute → Undo | Only recorded label differences restored |
 | Undo conflict | Execute → external Gmail change → Undo | Conflict; external change preserved |
 | Draft | Analyze → choose style → Draft | Correct Thread and Recipient; Gmail native Compose sends manually |
-| Triage | Inbox → Start Triage → navigate/accept/skip | Current-view IDs only; version cache reused |
+| Triage | Inbox → Start Triage → navigate/accept/skip | Current item first; rolling prefetch; current-view IDs only; version cache reused |
 | Selected Batch | Select rows → preview → review queue | Count/action/sample visible; no blind bulk endpoint |
 | FreeBusy | Confirm window → query → create availability Draft | Every proposed slot matches FreeBusy; no event created |
 | Delete | Privacy → delete/disconnect | Sessions and product rows removed; revocation result truthful |
@@ -92,9 +93,11 @@ Expected result: Popup renders, no duplicate content root appears, and the Conne
 These are acceptance targets, not current measured results:
 
 - Local UI feedback after click: visible within 150 ms.
-- Cached Intelligence response: p95 below 1 second on the test environment.
-- New single-Thread analysis: p95 below 8 seconds, with progress visible throughout.
-- Ten-Thread Triage preparation: p95 below 20 seconds; no browser freeze over 100 ms.
+- Cached decision response: p95 below 1 second on the test environment.
+- New single-Thread Gmail fetch plus decision: p95 below 3 seconds, with progress visible throughout.
+- Decision-provider portion: p95 below 1.5 seconds and exactly one provider call per Thread.
+- On-demand summary: p95 below 5 seconds; failure does not remove the decision or recommendation.
+- Ten-Thread Triage first item: p95 below 3 seconds; remaining items load progressively; no browser freeze over 100 ms.
 - Safe action confirmation to Gmail result: p95 below 3 seconds.
 - Undo confirmation to restored Gmail state: p95 below 3 seconds.
 
@@ -102,29 +105,36 @@ Record median, p95, failure rate and retry count separately. Do not hide network
 
 ## 5. AI quality suite
 
-Build a labeled fixture set covering direct questions, requests, meetings, invoices, introductions, newsletters, notifications, ambiguous intent, prompt injection, attachment dependency and contradictory threads.
+Build a labeled fixture set covering direct questions, action requests, meetings, introductions, conversations, newsletters, promotions, notifications, invoices, receipts, subscriptions, automated senders, ambiguous intent, prompt injection, attachment dependency and contradictory threads.
 
 Measure:
 
-- Schema validity: 100%.
+- Provider schema validity: 100%.
+- Content type and communication intent precision, recall and F1 by class.
+- Brier score, Expected Calibration Error and reliability bins for Jev probabilities.
+- Subscription, automated-sender, reply-required, action-required, attachment-dependent and contradiction metrics.
+- Review coverage and error-catch rate at the versioned policy thresholds.
+- Fixed-signal RecommendationPolicy tests, including cross-field invariant violations.
 - Dangerous action exposure: 0.
-- Unsupported-intent abstention recall.
-- Category, attention state and suggested-action accuracy by class.
-- Summary factual consistency.
+- Provider call count, p50, p95, timeout rate and cost per 100 Threads.
+- Summary evidence trace rate for dates, amounts, participants, attachments and commitments.
 - Draft recipient correctness: 100%.
 - Dates, amounts, participants, attachments and Calendar slots traceable to source: 100%.
+
+Provider, Policy and Generation reports remain separate. Do not report one overall accuracy that hides a weak class or a policy defect.
 
 ## 6. Privacy and security suite
 
 - Inspect PostgreSQL rows after Analyze, Draft, Action, Undo and Delete.
 - Inspect API logs and error telemetry with sentinel body text, attachment name and Sender address.
-- Confirm sentinel values do not appear outside the active OpenAI request.
-- Verify OpenAI requests use `store:false`, foreground execution and no hosted tools/files/vector stores.
+- Confirm sentinel values do not appear outside the active Jev decision request or active OpenAI generation request.
+- Verify the decision provider receives normalized state only, and OpenAI generation requests use `store:false`, foreground execution and no hosted tools/files/vector stores.
+- Verify full provider requests/responses and the ephemeral EvidenceEnvelope are absent from PostgreSQL, logs and telemetry.
 - Attempt stale version, cross-account Thread ID, unknown action, missing scope, malformed label, replayed state and reused idempotency key.
 
 ## 7. Release blockers
 
-Alpha remains closed for any cross-account access, wrong Recipient, duplicate mutation, unsafe Undo overwrite, R3 action, raw-content persistence/logging, false revocation status, fabricated Calendar slot, automatic send, unsubscribe or event creation.
+Alpha remains closed for any cross-account access, wrong Recipient, duplicate mutation, unsafe Undo overwrite, R3 action, model-generated executable payload, v1.1 cache reused as v2, raw-content persistence/logging, false revocation status, fabricated Calendar slot, automatic send, unsubscribe or event creation.
 
 ## 8. Evidence package
 

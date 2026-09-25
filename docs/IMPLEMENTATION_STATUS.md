@@ -1,57 +1,66 @@
 # Implementation status by Phase
 
-This file describes code readiness, not external release approval. Phase 8 remains closed until every real-account gate in `MANUAL_ACCEPTANCE.md` is evidenced.
+This file describes code readiness, not external release approval. Decision Pipeline v2 is implemented and the legacy v1.1 write path is removed. Phase 8 remains closed until provider evaluation and every real-account gate in `MANUAL_ACCEPTANCE.md` are evidenced.
 
 ## Phase 0 — Development Readiness
 
-Implemented: TypeScript workspace, independent Extension/API boundary, exact action allow-list, OAuth data-flow documents, encrypted-token boundary, Archive pre-image and Undo execution path.
+Code complete: TypeScript workspace, v2 shared contracts, independent Extension/API boundary, exact action allow-list, encrypted-token boundary, Archive pre-image and Undo execution path.
 
-Pending gate evidence: real Gmail test-account Archive/Undo and production log inspection.
+Pending external evidence: real Gmail Archive/Undo and production log inspection. The local PostgreSQL v2 migration and schema gate pass.
 
 ## Phase 1 — Foundation & Gmail Connector
 
-Implemented: React/Vite/MV3 Extension, Fastify API, PostgreSQL migration, PKCE OAuth, session hashing, refresh-token encryption, connect, incremental Calendar consent, disconnect/revoke/delete, and account-scoped repository queries.
+Code complete: React/Vite/MV3 Extension, Fastify API, PostgreSQL, PKCE OAuth, sessions, incremental Calendar consent and account-scoped queries. Gmail Threads now preserve each message's body, optional HTML, sender, recipients, headers and attachment metadata. Normalization and evidence extraction run per message.
 
-Pending gate evidence: Gmail SPA, multi-tab and MV3 suspension tests in the installed Extension.
+Pending external evidence: installed-Extension Gmail SPA, multi-tab and MV3 suspension tests.
 
-## Phase 2 — Email Intelligence Core
+## Phase 2 — Decision Pipeline Core
 
-Implemented: in-memory normalizer, one OpenAI Responses adapter, separate classifier/draft models, strict JSON Schema, `store:false`, versioned Intelligence, recommendation construction and Review abstention contract.
+Code complete:
 
-Pending gate evidence: production model evaluation set, prompt/version calibration and attachment-dependent abstention measurements.
+- `DecisionSignalsV2`, complete probability maps and per-signal confidence.
+- TypeSafe/JEV Choice, Noul and Score questions in one `systemOne` request.
+- Contract-compatible GPT-6 Luna decision backend selected by deployment config.
+- Deterministic code-owned Review, attention, priority, reason codes and recommendations.
+- Ephemeral EvidenceEnvelope; no raw message body in decision persistence.
+- Normalizer, question set, policy and cache pipeline versions.
+
+Verified locally: JEV and GPT-6 Luna both pass the 3/3 synthetic locked smoke set, and the Luna summary path returns valid structured output.
+
+Pending external evidence: representative locked-set calibration, per-class quality thresholds, latency and cost reporting. The three seed fixtures are not production-quality evidence.
 
 ## Phase 3 — Safe Actions & Undo
 
-Implemented: Archive, Mark Read, Label and Star; Gmail scope, account recommendation, thread-version and action matching; advisory-lock idempotency; per-message pre/post label images; conflict-safe Undo.
+Code complete and retained: Archive, Mark Read, Label and Star; account ownership, thread version and recommendation matching; advisory-lock idempotency; per-message label images and conflict-safe Undo. Models do not output actions or payloads.
 
-Pending gate evidence: live cross-account, concurrent retry and multi-message restoration exercises.
+Pending external evidence: live cross-account, concurrent retry and multi-message restoration exercises.
 
 ## Phase 4 — Thread Panel & Feedback
 
-Implemented: summary, state, one primary CTA, Why, Wrong, success, Undo and structured Accept/Edit/Skip/Wrong/Undo events without draft bodies.
+Code complete: `AnalysisResultV2`, independent summary loading, code-owned Review reasons, v2 feedback taxonomy and no uncalibrated aggregate confidence display.
 
-Pending gate evidence: installed-Gmail navigation and accessibility acceptance.
+Pending external evidence: installed-Gmail navigation, keyboard, focus and accessibility acceptance.
 
 ## Phase 5 — Smart Reply
 
-Implemented: one Gmail Draft, strict no-send boundary, Reply-To verification, self-recipient rejection, header-injection sanitation and pre-generation style intent.
+Code complete: Draft generation is separate from decisions, context is rebuilt from the current normalized Thread and EvidenceEnvelope, Reply-To and self-recipient checks remain, and the API creates a Gmail Draft without sending.
 
-Pending gate evidence: real recipient/thread correctness and factuality evaluation for dates, amounts, attachments and participants.
+Pending external evidence: real recipient/thread correctness and factuality review for dates, amounts, attachments and participants.
 
 ## Phase 6 — Inbox Triage & Selected Batch
 
-Implemented: on-demand queue for explicit current-view IDs, version cache, bounded concurrency, enum-only row badges, one-at-a-time Triage, input shortcut protection and Selected Batch preview. Batch mode leads into per-thread review; it does not expose a blind bulk-write endpoint.
+Code complete: the Extension owns the thread-ID queue, loads the current item first and prefetches the next four in parallel. Summary is on demand and a later provider failure cannot delay the first item. The old all-at-once `/v1/triage/queue` route is removed.
 
-Pending gate evidence: Gmail DOM variants, Compose focus, search/category routes and broken-DOM fallback.
+Pending external evidence: first-item latency, partial provider failure, Gmail DOM variants, Compose focus, search/category routes and broken-DOM fallback.
 
 ## Phase 7 — Calendar FreeBusy Collaboration
 
-Implemented: incremental FreeBusy consent, thread-level constraint review, deterministic working-hours/buffer/busy ranking, traceable source marker, OpenAI wording constrained to verified slots, Gmail Draft creation and no create-event capability.
+Code complete: incremental FreeBusy consent, deterministic slot ranking, verified-source markers, v2 meeting gate and Draft-only output. There is no create-event capability.
 
-Pending gate evidence: timezone/DST/cross-day scenarios, real shared-calendar behavior and slot-to-draft trace inspection.
+Pending external evidence: timezone/DST/cross-day and real shared-calendar scenarios.
 
 ## Phase 8 — Alpha Hardening & Release
 
-Implemented: production build, privacy/data control page, disconnect/delete path, safe log redaction, release runbook and manual blocker matrix.
+Code complete: v2 migration, pipeline-aware caches, provider disclosure, environment template, release checks, seed eval fixtures, offline policy evaluator, production build and privacy/data-control paths.
 
-Blocked by design: no external Alpha until all real Gmail/Calendar/OpenAI checks are complete. Gmail Watch remains post-Alpha.
+Local environment, provider credentials, PostgreSQL migration, API boundary and 22/22 Phase 8A live checks are ready. The remaining blockers are Google real-account acceptance and an approved representative de-identified or synthetic labeled corpus. Gmail Watch remains post-Alpha.

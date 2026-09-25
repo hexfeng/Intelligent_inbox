@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Brain, CheckCircle2, ExternalLink, ShieldCheck } from "lucide-react";
 import { sendBackground } from "./client.js";
+import { requestCurrentGmailAnalysis } from "./gmail-tab.js";
 import "./theme.css";
 import "./popup.css";
 
@@ -27,9 +28,10 @@ function Popup() {
   };
 
   const analyzeCurrent = async () => {
+    setError("");
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) return;
-    await chrome.tabs.sendMessage(tab.id, { type: "ANALYZE_CURRENT_THREAD" });
+    const errorMessage = await requestCurrentGmailAnalysis(tab, (tabId, message) => chrome.tabs.sendMessage(tabId, message));
+    if (errorMessage) { setError(errorMessage); return; }
     window.close();
   };
 

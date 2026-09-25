@@ -1,0 +1,3 @@
+{"id":"promotion_subscription","content_type":"PROMOTION","communication_intent":"INFORM","is_subscription":true,"attention_state":"FYI"}
+{"id":"invoice_action","content_type":"INVOICE","communication_intent":"REQUEST_ACTION","is_subscription":false,"attention_state":"REVIEW","note":"Attachment contents are required before deciding."}
+{"id":"meeting_request","content_type":"CONVERSATION","communication_intent":"REQUEST_MEETING","is_subscription":false,"attention_state":"NEEDS_REPLY"}
